@@ -42,12 +42,11 @@ app.mount("/mcp", mcp_server.streamable_http_app())
 
 # Secure Initialization of the AI Gateway Client
 # Automatically extracts credentials from the host environment memory
-api_key = os.getenv("OPENAI_API_KEY")
-if api_key:
-    client = OpenAI(api_key=api_key)
-else:
-    client = None
-    print("[WARNING] OPENAI_API_KEY not set; OpenAI client disabled. Pipeline will use mock responses.")
+# Load LLM client via configurable provider
+from llm import get_llm_client
+llm_client = get_llm_client()
+# For backward compatibility, keep a placeholder variable
+client = llm_client
 
 # --- 1. SYSTEM DESIGN (SD) DATA CONTRACT MATRIX ---
 class ZohoEnquiryPayload(BaseModel):
@@ -342,7 +341,7 @@ def execute_mcp_intelligence_pipeline(data: ZohoEnquiryPayload):
     
     try:
         # Trigger Model A: Dashboard Analytics Synthesis (Strict JSON Verification Mode)
-        response_a = client.chat.completions.create(
+        response_a = llm_client.chat_completion(
             model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
@@ -359,7 +358,7 @@ def execute_mcp_intelligence_pipeline(data: ZohoEnquiryPayload):
             insights["business_factors"]["enquiry_status"] = "Bottleneck Risk"
         
         # Trigger Model B: Communication Synthesis (Context‑Heavy Narrative Mode)
-        response_b = client.chat.completions.create(
+        response_b = llm_client.chat_completion(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": MODEL_B_SYSTEM_PROMPT},
@@ -402,7 +401,7 @@ def push_to_zoho_creator(enquiry_no: str, insights: dict, email_body: str):
     
     # Handle dry-run fallback gracefully
     if zoho_client.is_dry_run:
-        print(f"ℹ️ [Zoho Creator Integration] Running in DRY-RUN mode. Reason: {zoho_client.dry_run_reason}")
+        print(f"INFO [Zoho Creator Integration] Running in DRY-RUN mode. Reason: {zoho_client.dry_run_reason}")
         print("[Zoho Creator Integration] If credentials were provided, the following payload would be PATCHed:")
         print(json.dumps(patch_data, indent=2))
         return
@@ -413,9 +412,9 @@ def push_to_zoho_creator(enquiry_no: str, insights: dict, email_body: str):
         
         # 2. Patch record in Zoho Creator
         response = zoho_client.update_record(internal_id, patch_data)
-        print(f"✅ [Zoho Creator Integration] Record {enquiry_no} (ID: {internal_id}) updated successfully. Response: {response}")
+        print(f"SUCCESS [Zoho Creator Integration] Record {enquiry_no} (ID: {internal_id}) updated successfully. Response: {response}")
     except Exception as e:
-        print(f"❌ [Zoho Creator Integration Failure] Failed to update Zoho Creator for record {enquiry_no}: {str(e)}")
+        print(f"ERROR [Zoho Creator Integration Failure] Failed to update Zoho Creator for record {enquiry_no}: {str(e)}")
 
 # --- 5. NETWORK WEBHOOK GATEWAY INTERFACES ---
 @app.post("/webhooks/v1/enquiry", status_code=status.HTTP_200_OK)
