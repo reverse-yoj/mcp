@@ -406,6 +406,7 @@ def push_to_zoho_creator(enquiry_no: str, insights: dict, email_body: str):
         print(json.dumps(patch_data, indent=2))
         return
 
+
     try:
         # 1. Resolve internal 18-digit Record ID by matching criteria
         internal_id = zoho_client.find_record_id_by_enquiry_no(enquiry_no)
